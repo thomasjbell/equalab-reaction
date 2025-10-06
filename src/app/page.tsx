@@ -18,9 +18,36 @@ export default function ReactionsPage() {
   const [reactionTime, setReactionTime] = useState<number | null>(null);
   const [results, setResults] = useState<Result[]>([]);
   const [jumpStart, setJumpStart] = useState(false);
+  const [systemLatency, setSystemLatency] = useState<number>(0);
+  const [isCalibrating, setIsCalibrating] = useState<boolean>(true);
 
   const lightsOffTimeRef = useRef<number>(0);
   const gameActiveRef = useRef<boolean>(false);
+
+  // Calibrate system latency on mount
+  useEffect(() => {
+    const calibrate = async () => {
+      const samples: number[] = [];
+      
+      for (let i = 0; i < 10; i++) {
+        const start = performance.now();
+        await new Promise(resolve => setTimeout(resolve, 0));
+        const end = performance.now();
+        samples.push(end - start);
+      }
+      
+      // Use the median to avoid outliers
+      samples.sort((a, b) => a - b);
+      const median = samples[Math.floor(samples.length / 2)];
+      
+      // Add a small buffer for render time
+      const estimatedLatency = median + 8;
+      setSystemLatency(estimatedLatency);
+      setIsCalibrating(false);
+    };
+    
+    calibrate();
+  }, []);
 
   const startGame = () => {
     if (gameActiveRef.current) return;
@@ -65,12 +92,14 @@ export default function ReactionsPage() {
       ]);
     } else if (gameState === "reacting") {
       gameActiveRef.current = false;
-      const reactionMs = Math.round(performance.now() - lightsOffTimeRef.current);
-      setReactionTime(reactionMs);
+      const rawReactionMs = performance.now() - lightsOffTimeRef.current;
+      // Subtract system latency and ensure minimum of 0
+      const calibratedReactionMs = Math.max(0, Math.round(rawReactionMs - systemLatency));
+      setReactionTime(calibratedReactionMs);
       setGameState("result");
 
       setResults((prev) => [
-        { time: reactionMs, jumpStart: false, timestamp: new Date() },
+        { time: calibratedReactionMs, jumpStart: false, timestamp: new Date() },
         ...prev.slice(0, 9),
       ]);
     }
@@ -117,6 +146,17 @@ export default function ReactionsPage() {
     .filter((r) => !r.jumpStart && r.time !== null)
     .reduce((acc, r, _, arr) => acc + (r.time || 0) / arr.length, 0);
 
+  if (isCalibrating) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-cyan-600 mx-auto mb-4"></div>
+          <p className="text-xl text-gray-600 dark:text-gray-300">Calibrating system...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
       <div className="container mx-auto px-6 py-8">
@@ -134,6 +174,9 @@ export default function ReactionsPage() {
             </h1>
             <p className="text-lg text-gray-600 dark:text-gray-300">
               F1-Style Lights Reaction Testing
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+              System latency compensation: {systemLatency.toFixed(1)}ms
             </p>
           </div>
 
@@ -278,6 +321,7 @@ export default function ReactionsPage() {
                   <li>• When all lights turn off, react as quickly as possible</li>
                   <li>• Click anywhere or press SPACE to react</li>
                   <li>• Reacting before the lights go out counts as a jump start</li>
+                  <li>• Times are automatically calibrated for system latency</li>
                 </ul>
               </div>
             </div>
