@@ -23,6 +23,12 @@ export default function ReactionsPage() {
 
   const lightsOffTimeRef = useRef<number>(0);
   const gameActiveRef = useRef<boolean>(false);
+  const currentGameStateRef = useRef<GameState>("idle");
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    currentGameStateRef.current = gameState;
+  }, [gameState]);
 
   // Calibrate system latency on mount
   useEffect(() => {
@@ -40,8 +46,8 @@ export default function ReactionsPage() {
       samples.sort((a, b) => a - b);
       const median = samples[Math.floor(samples.length / 2)];
       
-      // Add a small buffer for render time
-      const estimatedLatency = median + 8;
+      // Reduced buffer since we're optimizing timing
+      const estimatedLatency = median + 5;
       setSystemLatency(estimatedLatency);
       setIsCalibrating(false);
     };
@@ -71,8 +77,9 @@ export default function ReactionsPage() {
         const randomDelay = 1000 + Math.random() * 4000;
         
         setTimeout(() => {
-          setActiveLights(0);
+          // Start timer FIRST, then change state
           lightsOffTimeRef.current = performance.now();
+          setActiveLights(0);
           setGameState("reacting");
         }, randomDelay);
       }
@@ -80,7 +87,9 @@ export default function ReactionsPage() {
   };
 
   const handleReaction = () => {
-    if (gameState === "countdown" || gameState === "waiting") {
+    const currentState = currentGameStateRef.current;
+    
+    if (currentState === "countdown" || currentState === "waiting") {
       gameActiveRef.current = false;
       setJumpStart(true);
       setGameState("result");
@@ -90,7 +99,7 @@ export default function ReactionsPage() {
         { time: null, jumpStart: true, timestamp: new Date() },
         ...prev.slice(0, 9),
       ]);
-    } else if (gameState === "reacting") {
+    } else if (currentState === "reacting") {
       gameActiveRef.current = false;
       const rawReactionMs = performance.now() - lightsOffTimeRef.current;
       // Subtract system latency and ensure minimum of 0
@@ -202,7 +211,7 @@ export default function ReactionsPage() {
                         boxShadow: activeLights >= lightNum 
                           ? '0 0 30px rgba(220, 38, 38, 0.8), 0 0 60px rgba(220, 38, 38, 0.4)' 
                           : 'none',
-                        transition: 'all 0.15s ease'
+                        transition: 'none'
                       }}
                     />
                   ))}
@@ -210,103 +219,75 @@ export default function ReactionsPage() {
 
                 {/* Status Display */}
                 <div className="text-center min-h-[120px] flex flex-col items-center justify-center">
-                  <AnimatePresence mode="wait">
-                    {gameState === "idle" && (
-                      <motion.div
-                        key="idle"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                      >
-                        <p className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-                          Ready to Start
-                        </p>
-                        <p className="text-gray-600 dark:text-gray-400">
-                          Click anywhere or press SPACE
-                        </p>
-                      </motion.div>
-                    )}
+                  {gameState === "idle" && (
+                    <div>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+                        Ready to Start
+                      </p>
+                      <p className="text-gray-600 dark:text-gray-400">
+                        Click anywhere or press SPACE
+                      </p>
+                    </div>
+                  )}
 
-                    {gameState === "countdown" && (
-                      <motion.div
-                        key="countdown"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                      >
-                        <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                          Get Ready...
-                        </p>
-                      </motion.div>
-                    )}
+                  {gameState === "countdown" && (
+                    <div>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                        Get Ready...
+                      </p>
+                    </div>
+                  )}
 
-                    {gameState === "waiting" && (
-                      <motion.div
-                        key="waiting"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                      >
-                        <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
-                          Wait for it...
-                        </p>
-                      </motion.div>
-                    )}
+                  {gameState === "waiting" && (
+                    <div>
+                      <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
+                        Wait for it...
+                      </p>
+                    </div>
+                  )}
 
-                    {gameState === "reacting" && (
-                      <motion.div
-                        key="reacting"
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, y: -10 }}
-                      >
-                        <p className="text-3xl font-bold text-green-600 dark:text-green-400">
-                          GO!
-                        </p>
-                      </motion.div>
-                    )}
+                  {gameState === "reacting" && (
+                    <div>
+                      <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                        GO!
+                      </p>
+                    </div>
+                  )}
 
-                    {gameState === "result" && (
-                      <motion.div
-                        key="result"
-                        initial={{ opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -10 }}
-                        className="w-full"
-                      >
-                        {jumpStart ? (
-                          <div>
-                            <p className="text-3xl font-bold text-red-600 dark:text-red-400 mb-2">
-                              JUMP START!
+                  {gameState === "result" && (
+                    <div className="w-full">
+                      {jumpStart ? (
+                        <div>
+                          <p className="text-3xl font-bold text-red-600 dark:text-red-400 mb-2">
+                            JUMP START!
+                          </p>
+                          <p className="text-gray-600 dark:text-gray-400 mb-4">
+                            You reacted before the lights went out
+                          </p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-5xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 text-transparent bg-clip-text mb-2">
+                            {reactionTime}ms
+                          </p>
+                          {reactionTime && reactionTime > 250 && (
+                            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                              💡 {getHint(reactionTime)}
                             </p>
-                            <p className="text-gray-600 dark:text-gray-400 mb-4">
-                              You reacted before the lights went out
-                            </p>
-                          </div>
-                        ) : (
-                          <div>
-                            <p className="text-5xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 text-transparent bg-clip-text mb-2">
-                              {reactionTime}ms
-                            </p>
-                            {reactionTime && reactionTime > 250 && (
-                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
-                                💡 {getHint(reactionTime)}
-                              </p>
-                            )}
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            startGame();
-                          }}
-                          className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg"
-                        >
-                          Try Again
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                          )}
+                        </div>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          startGame();
+                        }}
+                        className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg"
+                      >
+                        Try Again
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
