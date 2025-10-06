@@ -1,103 +1,347 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { LightBulbIcon, ClockIcon } from "@heroicons/react/24/solid";
+
+type GameState = "idle" | "countdown" | "waiting" | "reacting" | "result";
+
+interface Result {
+  time: number | null;
+  jumpStart: boolean;
+  timestamp: Date;
+}
+
+export default function ReactionsPage() {
+  const [gameState, setGameState] = useState<GameState>("idle");
+  const [activeLights, setActiveLights] = useState(0);
+  const [reactionTime, setReactionTime] = useState<number | null>(null);
+  const [results, setResults] = useState<Result[]>([]);
+  const [jumpStart, setJumpStart] = useState(false);
+
+  const lightsOffTimeRef = useRef<number>(0);
+  const gameActiveRef = useRef<boolean>(false);
+
+  const startGame = () => {
+    if (gameActiveRef.current) return;
+    
+    gameActiveRef.current = true;
+    setGameState("countdown");
+    setActiveLights(0);
+    setReactionTime(null);
+    setJumpStart(false);
+
+    let lightCount = 0;
+    
+    const interval = setInterval(() => {
+      lightCount++;
+      setActiveLights(lightCount);
+
+      if (lightCount === 5) {
+        clearInterval(interval);
+        setGameState("waiting");
+
+        const randomDelay = 1000 + Math.random() * 4000;
+        
+        setTimeout(() => {
+          setActiveLights(0);
+          lightsOffTimeRef.current = performance.now();
+          setGameState("reacting");
+        }, randomDelay);
+      }
+    }, 1000);
+  };
+
+  const handleReaction = () => {
+    if (gameState === "countdown" || gameState === "waiting") {
+      gameActiveRef.current = false;
+      setJumpStart(true);
+      setGameState("result");
+      setActiveLights(0);
+
+      setResults((prev) => [
+        { time: null, jumpStart: true, timestamp: new Date() },
+        ...prev.slice(0, 9),
+      ]);
+    } else if (gameState === "reacting") {
+      gameActiveRef.current = false;
+      const reactionMs = Math.round(performance.now() - lightsOffTimeRef.current);
+      setReactionTime(reactionMs);
+      setGameState("result");
+
+      setResults((prev) => [
+        { time: reactionMs, jumpStart: false, timestamp: new Date() },
+        ...prev.slice(0, 9),
+      ]);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyPress = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        
+        if (gameState === "idle" || gameState === "result") {
+          startGame();
+        } else if (gameState === "countdown" || gameState === "waiting" || gameState === "reacting") {
+          handleReaction();
+        }
+      }
+    };
+
+    const handleClick = () => {
+      if (gameState === "idle" || gameState === "result") {
+        startGame();
+      } else if (gameState === "countdown" || gameState === "waiting" || gameState === "reacting") {
+        handleReaction();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    window.addEventListener("click", handleClick);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress);
+      window.removeEventListener("click", handleClick);
+    };
+  }, [gameState]);
+
+  const getHint = (time: number) => {
+    if (time > 300) return "Focus on the lights. Try to anticipate the exact moment.";
+    if (time > 250) return "Good! Try to maintain focus for faster reactions.";
+    if (time > 200) return "Excellent reaction time!";
+    return "Outstanding! Professional level reaction time!";
+  };
+
+  const averageTime = results
+    .filter((r) => !r.jumpStart && r.time !== null)
+    .reduce((acc, r, _, arr) => acc + (r.time || 0) / arr.length, 0);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <div className="min-h-screen bg-gradient-to-br from-cyan-50 via-blue-50 to-indigo-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-900">
+      <div className="container mx-auto px-6 py-8">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="space-y-8"
+        >
+          {/* Header */}
+          <div className="text-center">
+            <h1 className="text-4xl md:text-6xl font-bold text-gray-900 dark:text-white mb-4">
+              <span className="bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 text-transparent bg-clip-text">
+                Reaction Trainer
+              </span>
+            </h1>
+            <p className="text-lg text-gray-600 dark:text-gray-300">
+              F1-Style Lights Reaction Testing
+            </p>
+          </div>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+          {/* Main Content Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 max-w-7xl mx-auto">
+            {/* Lights and Game Area */}
+            <div className="lg:col-span-2 space-y-6">
+              {/* Lights */}
+              <div className="relative bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-700 p-8">
+                
+                {/* Lights Container */}
+                <div className="flex justify-center items-center gap-6 mb-8 min-h-[100px]">
+                  {[1, 2, 3, 4, 5].map((lightNum) => (
+                    <div
+                      key={lightNum}
+                      style={{
+                        width: '80px',
+                        height: '80px',
+                        borderRadius: '50%',
+                        backgroundColor: activeLights >= lightNum ? '#dc2626' : '#1f2937',
+                        border: '4px solid',
+                        borderColor: activeLights >= lightNum ? '#991b1b' : '#374151',
+                        boxShadow: activeLights >= lightNum 
+                          ? '0 0 30px rgba(220, 38, 38, 0.8), 0 0 60px rgba(220, 38, 38, 0.4)' 
+                          : 'none',
+                        transition: 'all 0.15s ease'
+                      }}
+                    />
+                  ))}
+                </div>
+
+                {/* Status Display */}
+                <div className="text-center min-h-[120px] flex flex-col items-center justify-center">
+                  <AnimatePresence mode="wait">
+                    {gameState === "idle" && (
+                      <motion.div
+                        key="idle"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                      >
+                        <p className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
+                          Ready to Start
+                        </p>
+                        <p className="text-gray-600 dark:text-gray-400">
+                          Click anywhere or press SPACE
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {gameState === "countdown" && (
+                      <motion.div
+                        key="countdown"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                      >
+                        <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                          Get Ready...
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {gameState === "waiting" && (
+                      <motion.div
+                        key="waiting"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                      >
+                        <p className="text-2xl font-semibold text-yellow-600 dark:text-yellow-400">
+                          Wait for it...
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {gameState === "reacting" && (
+                      <motion.div
+                        key="reacting"
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        exit={{ opacity: 0, y: -10 }}
+                      >
+                        <p className="text-3xl font-bold text-green-600 dark:text-green-400">
+                          GO!
+                        </p>
+                      </motion.div>
+                    )}
+
+                    {gameState === "result" && (
+                      <motion.div
+                        key="result"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="w-full"
+                      >
+                        {jumpStart ? (
+                          <div>
+                            <p className="text-3xl font-bold text-red-600 dark:text-red-400 mb-2">
+                              JUMP START!
+                            </p>
+                            <p className="text-gray-600 dark:text-gray-400 mb-4">
+                              You reacted before the lights went out
+                            </p>
+                          </div>
+                        ) : (
+                          <div>
+                            <p className="text-5xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 text-transparent bg-clip-text mb-2">
+                              {reactionTime}ms
+                            </p>
+                            {reactionTime && reactionTime > 250 && (
+                              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4 max-w-md mx-auto">
+                                💡 {getHint(reactionTime)}
+                              </p>
+                            )}
+                          </div>
+                        )}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            startGame();
+                          }}
+                          className="px-6 py-3 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-700 hover:to-blue-700 text-white rounded-xl font-semibold transition-all shadow-lg"
+                        >
+                          Try Again
+                        </button>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              </div>
+
+              {/* Instructions */}
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-700 p-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white mb-3 flex items-center gap-2">
+                  <LightBulbIcon className="w-6 h-6 text-yellow-500" />
+                  How to Play
+                </h3>
+                <ul className="space-y-2 text-gray-600 dark:text-gray-300">
+                  <li>• Watch the five red lights illuminate one by one</li>
+                  <li>• When all lights turn off, react as quickly as possible</li>
+                  <li>• Click anywhere or press SPACE to react</li>
+                  <li>• Reacting before the lights go out counts as a jump start</li>
+                </ul>
+              </div>
+            </div>
+
+            {/* Results Table */}
+            <div className="lg:col-span-1">
+              <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-xl border border-gray-200 dark:border-gray-700 p-6 sticky top-8">
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                  <ClockIcon className="w-6 h-6 text-cyan-600" />
+                  Results
+                </h3>
+
+                {results.length > 0 && !isNaN(averageTime) && averageTime > 0 && (
+                  <div className="mb-4 p-4 bg-gradient-to-r from-cyan-500/10 to-blue-500/10 rounded-xl border border-cyan-200 dark:border-cyan-700">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">
+                      Average Time
+                    </p>
+                    <p className="text-3xl font-bold bg-gradient-to-r from-cyan-600 to-blue-600 dark:from-cyan-400 dark:to-blue-400 text-transparent bg-clip-text">
+                      {Math.round(averageTime)}ms
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-2 max-h-[500px] overflow-y-auto">
+                  {results.length === 0 ? (
+                    <p className="text-center text-gray-500 dark:text-gray-400 py-8">
+                      No attempts yet
+                    </p>
+                  ) : (
+                    results.map((result, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -20 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: index * 0.05 }}
+                        className={`p-3 rounded-xl border ${
+                          result.jumpStart
+                            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                            : "bg-gray-50 dark:bg-gray-700/50 border-gray-200 dark:border-gray-600"
+                        }`}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                            Attempt {results.length - index}
+                          </span>
+                          <span
+                            className={`text-lg font-bold ${
+                              result.jumpStart
+                                ? "text-red-600 dark:text-red-400"
+                                : "text-gray-900 dark:text-white"
+                            }`}
+                          >
+                            {result.jumpStart ? "JUMP START" : `${result.time}ms`}
+                          </span>
+                        </div>
+                      </motion.div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      </div>
     </div>
   );
 }
